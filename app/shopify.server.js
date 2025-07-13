@@ -18,7 +18,6 @@ const shopify = shopifyApp({
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
 
-  // ✅ Define webhooks here
   webhooks: {
     APP_UNINSTALLED: {
       deliveryMethod: DeliveryMethod.Http,
@@ -30,13 +29,9 @@ const shopify = shopifyApp({
     },
   },
 
-  // ✅ Register webhooks after auth
   hooks: {
     afterAuth: async ({ session }) => {
-      await shopify.registerWebhooks({
-        session,
-        webhooks: shopify.webhooks,
-      });
+      await shopify.registerWebhooks({ session }); // ✅ Correct way
     },
   },
 
