@@ -1,19 +1,23 @@
 import { authenticate } from "../shopify.server";
+import shopify from "../shopify.server"; // 👈 Make sure this is the correct path
 
 export const action = async ({ request }) => {
-  const { payload, admin, shop, topic } = await authenticate.webhook(request);
+  const { payload, session, shop, topic } = await authenticate.webhook(request);
+  const admin = new shopify.api.clients.Graphql({ session });
+
+  console.log(admin);
 
   console.log(`📦 Webhook received: ${topic} from ${shop}`);
   console.log("🧾 Order payload:", payload);
 
-  const orderGID = payload.admin_graphql_api_id; // Example: gid://shopify/Order/1234567890
+  const orderGID = payload.admin_graphql_api_id;
 
   if (!orderGID) {
-    console.error("❌ admin_graphql_api_id not found");
+    console.error("❌ Order GID not found");
     return new Response("Missing order GID", { status: 400 });
   }
 
-  const query = `#graphql
+  const mutation = `#graphql
     mutation createOrderMetafield($metafields: [MetafieldsSetInput!]!) {
       metafieldsSet(metafields: $metafields) {
         metafields {
@@ -42,15 +46,15 @@ export const action = async ({ request }) => {
   };
 
   try {
-    const response = await admin.graphql(query, { variables });
-    const json = await response.json();
+    const response = await admin.query({ data: { query: mutation, variables } });
+    const data = response.body.data;
 
-    if (json.data?.metafieldsSet?.userErrors?.length > 0) {
-      console.error("❌ Metafield creation error:", json.data.metafieldsSet.userErrors);
+    if (data.metafieldsSet.userErrors.length > 0) {
+      console.error("❌ Metafield creation errors:", data.metafieldsSet.userErrors);
       return new Response("Metafield creation failed", { status: 500 });
     }
 
-    console.log("✅ Metafield created:", json.data.metafieldsSet.metafields);
+    console.log("✅ Metafield created:", data.metafieldsSet.metafields);
     return new Response("Metafield created", { status: 200 });
   } catch (err) {
     console.error("❌ Exception in webhook:", err);
