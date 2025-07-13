@@ -1,13 +1,12 @@
 import { authenticate } from "../shopify.server";
 
-
 export const action = async ({ request }) => {
   const { payload, session, topic, shop } = await authenticate.webhook(request);
 
   console.log(`📦 Webhook received: ${topic} from ${shop}`);
   console.log("🧾 Order payload:", payload);
 
-  const orderId = payload.id; // 🟢 Shopify se aaya order ID
+  const orderId = payload?.id;
 
   if (!orderId) {
     console.error("❌ Order ID not found in webhook payload");
@@ -17,27 +16,27 @@ export const action = async ({ request }) => {
   const client = new shopify.api.clients.Rest({ session });
 
 
-  console.log(client);
+  console.log("client method here:", client)
   try {
-    await client.post({
+    const metafieldResponse = await client.post({
       path: "metafields",
       data: {
         metafield: {
           namespace: "order",
           key: "webhook_note",
-          value: "Order created from webhook",
+          value: `Order #${orderId} created via webhook`,
           type: "single_line_text_field",
           owner_resource: "order",
-          owner_id: orderId, // ✅ Dynamic order ID
+          owner_id: orderId,
         },
       },
       type: "application/json",
     });
 
-    console.log(`✅ Metafield created for order ${orderId}`);
-    return new Response("OK", { status: 200 });
+    console.log("✅ Metafield created:", metafieldResponse?.body);
+    return new Response("Metafield created", { status: 200 });
   } catch (error) {
     console.error("❌ Failed to create metafield:", error);
-    return new Response("Metafield error", { status: 500 });
+    return new Response("Metafield creation failed", { status: 500 });
   }
 };
