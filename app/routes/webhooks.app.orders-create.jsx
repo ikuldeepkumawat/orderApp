@@ -1,44 +1,59 @@
 import { authenticate } from "../shopify.server";
-import shopify from "../shopify.server";
 
 export const action = async ({ request }) => {
-  const { payload, session, topic, shop } = await authenticate.webhook(request);
+  const { payload, admin, shop, topic } = await authenticate.webhook(request);
 
   console.log(`📦 Webhook received: ${topic} from ${shop}`);
   console.log("🧾 Order payload:", payload);
 
-  const orderId = payload?.id;
+  const orderGID = payload.admin_graphql_api_id; // Example: gid://shopify/Order/1234567890
 
-  if (!orderId) {
-    console.error("❌ Order ID not found in webhook payload");
-    return new Response("Order ID missing", { status: 400 });
+  if (!orderGID) {
+    console.error("❌ admin_graphql_api_id not found");
+    return new Response("Missing order GID", { status: 400 });
   }
 
-  const client = new shopify.api.clients.Rest({ session });
+  const query = `#graphql
+    mutation createOrderMetafield($metafields: [MetafieldsSetInput!]!) {
+      metafieldsSet(metafields: $metafields) {
+        metafields {
+          id
+          key
+          value
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
 
-
-  console.log("client method here:", client)
+  const variables = {
+    metafields: [
+      {
+        ownerId: orderGID,
+        namespace: "order_notes",
+        key: "created_via_webhook",
+        type: "single_line_text_field",
+        value: `Order received at ${new Date().toISOString()}`,
+      },
+    ],
+  };
 
   try {
-    const metafieldResponse = await client.post({
-      path: "metafields",
-      data: {
-        metafield: {
-          namespace: "order",
-          key: "webhook_note",
-          value: `Order #${orderId} created via webhook`,
-          type: "single_line_text_field",
-          owner_resource: "order",
-          owner_id: orderId,
-        },
-      },
-      type: "application/json",
-    });
+    const response = await admin.graphql(query, { variables });
+    const json = await response.json();
 
-    console.log("✅ Metafield created:", metafieldResponse?.body);
+    if (json.data?.metafieldsSet?.userErrors?.length > 0) {
+      console.error("❌ Metafield creation error:", json.data.metafieldsSet.userErrors);
+      return new Response("Metafield creation failed", { status: 500 });
+    }
+
+    console.log("✅ Metafield created:", json.data.metafieldsSet.metafields);
     return new Response("Metafield created", { status: 200 });
-  } catch (error) {
-    console.error("❌ Failed to create metafield:", error);
-    return new Response("Metafield creation failed", { status: 500 });
+  } catch (err) {
+    console.error("❌ Exception in webhook:", err);
+    return new Response("Internal error", { status: 500 });
   }
 };
