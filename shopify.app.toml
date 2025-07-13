@@ -3,7 +3,7 @@
 client_id = "35d941fb2669a60fe2280f787c125a37"
 name = "order-create"
 handle = "order-create-4"
-application_url = "https://example.com/"
+application_url = "https://orderapp-kicm.onrender.com/"
 embedded = true
 
 [build]
@@ -30,7 +30,9 @@ api_version = "2025-07"
 scopes = "write_products, write_orders ,read_orders"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://orderapp-kicm.onrender.com/api/auth",
+"https://orderapp-kicm.onrender.com/auth/shopify/callback",
+"https://orderapp-kicm.onrender.com/api/auth/callback ]
 
 [pos]
 embedded = false
