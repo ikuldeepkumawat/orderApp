@@ -1,12 +1,13 @@
 import { authenticate } from "../shopify.server";
-import { shopifyApi, ApiVersion } from "@shopify/shopify-api";
+import { GraphqlClient } from "@shopify/shopify-api"; // 👈 Direct GraphQL client
+import db from "../db.server";
 
 export const action = async ({ request }) => {
-  const { payload, session, topic, shop } = await authenticate.webhook(request);
+  const { payload, topic, shop } = await authenticate.webhook(request);
 
   console.log(`📦 Webhook received: ${topic} from ${shop}`);
   console.log("🧾 Order payload:", payload);
-  console.log("session.accessToken", session.accessToken)
+
   const orderGID = payload.admin_graphql_api_id;
 
   if (!orderGID) {
@@ -14,11 +15,17 @@ export const action = async ({ request }) => {
     return new Response("Missing order GID", { status: 400 });
   }
 
-  const client = shopifyApi({
-    adminApiAccessToken: session.accessToken,
-    shopDomain: session.shop,
-    apiVersion: ApiVersion.July24,
-  });
+  // 🔍 Fetch access token from DB
+  const store = await db.store.findUnique({ where: { shop } });
+  const accessToken = store?.accessToken;
+
+  if (!accessToken) {
+    console.error("❌ No access token found for shop:", shop);
+    return new Response("Missing access token", { status: 401 });
+  }
+
+  // ✅ Create GraphQL client
+  const graphqlClient = new GraphqlClient(shop, accessToken);
 
   const mutation = `#graphql
     mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
@@ -48,16 +55,15 @@ export const action = async ({ request }) => {
   };
 
   try {
-    const res = await client.admin.graphql({ query: mutation, variables });
+    const response = await graphqlClient.query({ data: { query: mutation, variables } });
+    const { metafieldsSet } = response.body.data;
 
-    const json = await res.json();
-
-    if (json.data.metafieldsSet.userErrors.length > 0) {
-      console.error("Metafield error:", json.data.metafieldsSet.userErrors);
+    if (metafieldsSet.userErrors.length > 0) {
+      console.error("❌ Metafield Errors:", metafieldsSet.userErrors);
       return new Response("Metafield creation failed", { status: 500 });
     }
 
-    console.log("✅ Metafield created:", json.data.metafieldsSet.metafields);
+    console.log("✅ Metafield Created:", metafieldsSet.metafields);
     return new Response("Metafield created", { status: 200 });
   } catch (err) {
     console.error("❌ GraphQL Error:", err);
