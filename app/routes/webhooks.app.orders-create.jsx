@@ -1,11 +1,8 @@
 import { authenticate } from "../shopify.server";
-import shopify from "../shopify.server"; // 👈 Make sure this is the correct path
+import { Graphql } from "@shopify/shopify-api";
 
 export const action = async ({ request }) => {
-  const { payload, session, shop, topic } = await authenticate.webhook(request);
-  const admin = new shopify.api.clients.Graphql({ session });
-
-  console.log(admin);
+  const { payload, session, topic, shop } = await authenticate.webhook(request);
 
   console.log(`📦 Webhook received: ${topic} from ${shop}`);
   console.log("🧾 Order payload:", payload);
@@ -13,12 +10,14 @@ export const action = async ({ request }) => {
   const orderGID = payload.admin_graphql_api_id;
 
   if (!orderGID) {
-    console.error("❌ Order GID not found");
+    console.error("❌ Missing order GID");
     return new Response("Missing order GID", { status: 400 });
   }
 
+  const admin = new Graphql({ session });
+
   const mutation = `#graphql
-    mutation createOrderMetafield($metafields: [MetafieldsSetInput!]!) {
+    mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
       metafieldsSet(metafields: $metafields) {
         metafields {
           id
@@ -30,8 +29,7 @@ export const action = async ({ request }) => {
           message
         }
       }
-    }
-  `;
+    }`;
 
   const variables = {
     metafields: [
@@ -40,7 +38,7 @@ export const action = async ({ request }) => {
         namespace: "order_notes",
         key: "created_via_webhook",
         type: "single_line_text_field",
-        value: `Order received at ${new Date().toISOString()}`,
+        value: `Created at ${new Date().toISOString()}`,
       },
     ],
   };
@@ -50,14 +48,14 @@ export const action = async ({ request }) => {
     const data = response.body.data;
 
     if (data.metafieldsSet.userErrors.length > 0) {
-      console.error("❌ Metafield creation errors:", data.metafieldsSet.userErrors);
-      return new Response("Metafield creation failed", { status: 500 });
+      console.error("Metafield creation errors:", data.metafieldsSet.userErrors);
+      return new Response("Errors in creating metafield", { status: 500 });
     }
 
     console.log("✅ Metafield created:", data.metafieldsSet.metafields);
     return new Response("Metafield created", { status: 200 });
-  } catch (err) {
-    console.error("❌ Exception in webhook:", err);
-    return new Response("Internal error", { status: 500 });
+  } catch (error) {
+    console.error("❌ Error creating metafield:", error);
+    return new Response("Internal Server Error", { status: 500 });
   }
 };
