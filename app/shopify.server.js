@@ -22,11 +22,11 @@ const shopify = shopifyApp({
   webhooks: {
     APP_UNINSTALLED: {
       deliveryMethod: DeliveryMethod.Http,
-      callbackUrl: "/webhooks/uninstalled",
+      callbackUrl: "/webhooks/app/uninstalled",
     },
     ORDERS_CREATE: {
       deliveryMethod: DeliveryMethod.Http,
-      callbackUrl: "/webhooks/orders-create",
+      callbackUrl: "/webhooks/app/orders-create",
     },
   },
 
