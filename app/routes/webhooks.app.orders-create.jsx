@@ -6,7 +6,7 @@ export const action = async ({ request }) => {
 
   console.log(`📦 Webhook received: ${topic} from ${shop}`);
   console.log("🧾 Order payload:", payload);
-
+  console.log("session.accessToken", session.accessToken)
   const orderGID = payload.admin_graphql_api_id;
 
   if (!orderGID) {
