@@ -16,7 +16,7 @@ export const action = async ({ request }) => {
   }
 
   // 🔍 Fetch access token from DB
-  const store = await db.store.findUnique({ where: { shop } });
+  const store = await db.session.findUnique({ where: { shop } });
   const accessToken = store?.accessToken;
 
   if (!accessToken) {
