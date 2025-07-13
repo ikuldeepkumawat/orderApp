@@ -1,5 +1,5 @@
 import { authenticate } from "../shopify.server";
-import { Graphql } from "@shopify/shopify-api";
+import { shopifyApi, ApiVersion } from "@shopify/shopify-api";
 
 export const action = async ({ request }) => {
   const { payload, session, topic, shop } = await authenticate.webhook(request);
@@ -14,7 +14,11 @@ export const action = async ({ request }) => {
     return new Response("Missing order GID", { status: 400 });
   }
 
-  const admin = new Graphql({ session });
+  const client = shopifyApi({
+    adminApiAccessToken: session.accessToken,
+    shopDomain: session.shop,
+    apiVersion: ApiVersion.July24,
+  });
 
   const mutation = `#graphql
     mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
@@ -44,18 +48,19 @@ export const action = async ({ request }) => {
   };
 
   try {
-    const response = await admin.query({ data: { query: mutation, variables } });
-    const data = response.body.data;
+    const res = await client.admin.graphql({ query: mutation, variables });
 
-    if (data.metafieldsSet.userErrors.length > 0) {
-      console.error("Metafield creation errors:", data.metafieldsSet.userErrors);
-      return new Response("Errors in creating metafield", { status: 500 });
+    const json = await res.json();
+
+    if (json.data.metafieldsSet.userErrors.length > 0) {
+      console.error("Metafield error:", json.data.metafieldsSet.userErrors);
+      return new Response("Metafield creation failed", { status: 500 });
     }
 
-    console.log("✅ Metafield created:", data.metafieldsSet.metafields);
+    console.log("✅ Metafield created:", json.data.metafieldsSet.metafields);
     return new Response("Metafield created", { status: 200 });
-  } catch (error) {
-    console.error("❌ Error creating metafield:", error);
-    return new Response("Internal Server Error", { status: 500 });
+  } catch (err) {
+    console.error("❌ GraphQL Error:", err);
+    return new Response("Server error", { status: 500 });
   }
 };
