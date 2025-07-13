@@ -1,4 +1,5 @@
 import { authenticate } from "../shopify.server";
+import shopify from "../shopify.server";
 
 export const action = async ({ request }) => {
   const { payload, session, topic, shop } = await authenticate.webhook(request);
@@ -17,6 +18,7 @@ export const action = async ({ request }) => {
 
 
   console.log("client method here:", client)
+
   try {
     const metafieldResponse = await client.post({
       path: "metafields",
